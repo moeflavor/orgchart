@@ -1,40 +1,11 @@
 // Configuration
 const CONFIG = {
-    // Replace this with your Google Sheets CSV export URL
-    // Format: https://docs.google.com/spreadsheets/d/SHEET_ID/export?format=csv&gid=SHEET_GID
     SHEET_URL: 'https://docs.google.com/spreadsheets/d/18kYODhewBvEQWVHSASmt7x9rQJ7lRzO_l_Ce0TBG10k/export?format=csv&gid=0',
-
-    // Role icons mapping - Modern themed
-    ROLE_ICONS: {
-        'CEO': '👑',
-        'COO': '💎',
-        'Admin': '⚡',
-        'Marketing': '🚀',
-        'Production': '⚙️',
-        'Warehouse': '📦',
-        'Manager': '⭐',
-        'Team Lead': '🎯',
-        'Team Member': '💫',
-        'Default': '🎮'
-    },
-
-    // Role CSS classes
-    ROLE_CLASSES: {
-        'CEO': 'ceo',
-        'COO': 'coo',
-        'Admin': 'department-head',
-        'Marketing': 'department-head',
-        'Production': 'department-head',
-        'Warehouse': 'department-head',
-        'Manager': 'manager',
-        'Team Lead': 'manager',
-        'Default': 'team-member'
-    }
 };
 
 // Global state
 let orgData = [];
-let expandedNodes = new Set();
+let expandedDepartments = new Set();
 let zoomLevel = 1;
 let panX = 0;
 let panY = 0;
@@ -54,17 +25,25 @@ const zoomInBtn = document.getElementById('zoomInBtn');
 const zoomOutBtn = document.getElementById('zoomOutBtn');
 const resetZoomBtn = document.getElementById('resetZoomBtn');
 const retryBtn = document.getElementById('retryBtn');
+const employeeModal = document.getElementById('employeeModal');
+const modalClose = document.getElementById('modalClose');
 
 // Event Listeners
 refreshBtn.addEventListener('click', () => loadData());
-expandAllBtn.addEventListener('click', () => toggleAllNodes(true));
-collapseAllBtn.addEventListener('click', () => toggleAllNodes(false));
+expandAllBtn.addEventListener('click', () => toggleAllDepartments(true));
+collapseAllBtn.addEventListener('click', () => toggleAllDepartments(false));
 zoomInBtn.addEventListener('click', () => zoom(0.1));
 zoomOutBtn.addEventListener('click', () => zoom(-0.1));
 resetZoomBtn.addEventListener('click', () => resetView());
 retryBtn.addEventListener('click', () => {
     hideError();
     loadData();
+});
+
+// Modal controls
+modalClose.addEventListener('click', () => closeModal());
+employeeModal.addEventListener('click', (e) => {
+    if (e.target === employeeModal) closeModal();
 });
 
 // Zoom and Pan functionality
@@ -143,7 +122,6 @@ async function loadData() {
     showLoading();
 
     try {
-        // Check if URL is configured
         if (!CONFIG.SHEET_URL || CONFIG.SHEET_URL === 'YOUR_GOOGLE_SHEET_CSV_URL') {
             throw new Error('Please configure your Google Sheets URL in script.js');
         }
@@ -180,10 +158,10 @@ function parseCSV(csv) {
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCSVLine(lines[i]);
-        if (values.length === headers.length) {
+        if (values.length >= headers.length) {
             const entry = {};
             headers.forEach((header, index) => {
-                entry[header] = values[index].trim();
+                entry[header] = values[index] ? values[index].trim() : '';
             });
             data.push(entry);
         }
@@ -215,243 +193,223 @@ function parseCSVLine(line) {
     return values;
 }
 
-// Build organizational chart
+// Build organizational chart with new hierarchy: CEO → OBM → Departments
 function buildOrgChart() {
     orgChart.innerHTML = '';
 
-    // Build hierarchy
-    const hierarchy = buildHierarchy(orgData);
+    const chartContainer = document.createElement('div');
+    chartContainer.className = 'chart-container';
 
-    // Render chart
-    if (hierarchy.length > 0) {
-        const chartContainer = document.createElement('div');
-        chartContainer.className = 'chart-container';
+    // Find CEO (Catherine)
+    const ceo = orgData.find(p => p.Name === 'Catherine' || p.Title.toLowerCase().includes('ceo'));
 
-        hierarchy.forEach(node => {
-            chartContainer.appendChild(renderNode(node));
-        });
+    // Find OBM (Pauline)
+    const obm = orgData.find(p => p.Name === 'Pauline' || p.Title.toLowerCase().includes('obm') || p.Title.toLowerCase().includes('coo'));
 
-        orgChart.appendChild(chartContainer);
-    } else {
-        orgChart.innerHTML = '<p style="text-align: center; padding: 40px; font-size: 14px; color: var(--text-secondary);">No organizational data to display</p>';
+    // Get all departments
+    const departments = [...new Set(orgData
+        .map(p => p.Department)
+        .filter(d => d && d.trim()))];
+
+    // Render CEO
+    if (ceo) {
+        chartContainer.appendChild(renderPerson(ceo, 'ceo'));
     }
-}
 
-// Build hierarchy from flat data
-function buildHierarchy(data) {
-    const nodeMap = new Map();
-    const roots = [];
+    // Connection line
+    const ceoLine = document.createElement('div');
+    ceoLine.className = 'connection-line';
+    ceoLine.style.height = '40px';
+    chartContainer.appendChild(ceoLine);
 
-    // Create all nodes
-    data.forEach(item => {
-        const node = {
-            id: item.Name || item.name || '',
-            name: item.Name || item.name || 'Unknown',
-            title: item.Title || item.title || item.Role || item.role || '',
-            department: item.Department || item.department || '',
-            manager: item.Manager || item.manager || item.ReportsTo || item.reportsTo || '',
-            children: []
-        };
-        nodeMap.set(node.id, node);
+    // Render OBM
+    if (obm) {
+        chartContainer.appendChild(renderPerson(obm, 'obm'));
+    }
+
+    // Connection line
+    const obmLine = document.createElement('div');
+    obmLine.className = 'connection-line';
+    obmLine.style.height = '40px';
+    chartContainer.appendChild(obmLine);
+
+    // Render Departments Grid
+    const deptGrid = document.createElement('div');
+    deptGrid.className = 'departments-grid';
+
+    departments.forEach(dept => {
+        const deptNode = renderDepartment(dept);
+        deptGrid.appendChild(deptNode);
     });
 
-    // Build parent-child relationships
-    nodeMap.forEach(node => {
-        if (node.manager && nodeMap.has(node.manager)) {
-            nodeMap.get(node.manager).children.push(node);
-        } else {
-            roots.push(node);
-        }
-    });
-
-    return roots;
+    chartContainer.appendChild(deptGrid);
+    orgChart.appendChild(chartContainer);
 }
 
-// Render a node and its children
-function renderNode(node, level = 0) {
+// Render a person card
+function renderPerson(person, roleClass = 'team-member') {
+    const node = document.createElement('div');
+    node.className = `node ${roleClass}`;
+    node.onclick = () => showEmployeeModal(person);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'node-name';
+    nameEl.textContent = person.Name;
+    node.appendChild(nameEl);
+
+    if (person.Title) {
+        const titleEl = document.createElement('div');
+        titleEl.className = 'node-title';
+        titleEl.textContent = person.Title;
+        node.appendChild(titleEl);
+    }
+
+    return node;
+}
+
+// Render a department with its team
+function renderDepartment(departmentName) {
     const container = document.createElement('div');
     container.className = 'node-container';
-    container.dataset.nodeId = node.id;
 
-    // Create node element
-    const nodeElement = document.createElement('div');
-    nodeElement.className = 'node ' + getNodeClass(node);
+    // Department header
+    const deptNode = document.createElement('div');
+    deptNode.className = 'node department';
 
-    // Add hover effect for team highlighting
-    nodeElement.addEventListener('mouseenter', () => highlightTeam(node.id, true));
-    nodeElement.addEventListener('mouseleave', () => highlightTeam(node.id, false));
+    const deptNameEl = document.createElement('div');
+    deptNameEl.className = 'node-name';
+    deptNameEl.textContent = departmentName;
+    deptNode.appendChild(deptNameEl);
 
-    // Add icon
-    const icon = document.createElement('span');
-    icon.className = 'node-icon';
-    icon.textContent = getNodeIcon(node);
-    nodeElement.appendChild(icon);
+    // Get all people in this department
+    const deptPeople = orgData.filter(p => p.Department === departmentName);
 
-    // Add name
-    const nameElement = document.createElement('div');
-    nameElement.className = 'node-name';
-    nameElement.textContent = node.name;
-    nodeElement.appendChild(nameElement);
-
-    // Add title
-    if (node.title) {
-        const titleElement = document.createElement('div');
-        titleElement.className = 'node-title';
-        titleElement.textContent = node.title;
-        nodeElement.appendChild(titleElement);
-    }
-
-    // Add department
-    if (node.department) {
-        const deptElement = document.createElement('div');
-        deptElement.className = 'node-title';
-        deptElement.textContent = `📍 ${node.department}`;
-        nodeElement.appendChild(deptElement);
-    }
-
-    // Add expand/collapse button if has children
-    if (node.children && node.children.length > 0) {
+    if (deptPeople.length > 0) {
         const expandBtn = document.createElement('button');
         expandBtn.className = 'expand-btn';
-        expandBtn.textContent = expandedNodes.has(node.id) ? '▲ Collapse' : '▼ Expand';
+        expandBtn.textContent = expandedDepartments.has(departmentName) ? 'Collapse' : 'Expand';
         expandBtn.onclick = (e) => {
             e.stopPropagation();
-            toggleNode(node.id);
+            toggleDepartment(departmentName);
         };
-        nodeElement.appendChild(expandBtn);
+        deptNode.appendChild(expandBtn);
     }
 
-    container.appendChild(nodeElement);
+    container.appendChild(deptNode);
 
-    // Render children
-    if (node.children && node.children.length > 0) {
-        // Connection line
-        const connectionLine = document.createElement('div');
-        connectionLine.className = 'connection-line';
-        connectionLine.style.height = '40px';
-        container.appendChild(connectionLine);
+    // Render team members
+    if (deptPeople.length > 0) {
+        const teamContainer = document.createElement('div');
+        teamContainer.className = 'children-container';
+        teamContainer.id = `dept-${departmentName}`;
 
-        // Children container
-        const childrenContainer = document.createElement('div');
-        childrenContainer.className = 'children-container';
-        childrenContainer.id = `children-${node.id}`;
-
-        if (!expandedNodes.has(node.id)) {
-            childrenContainer.classList.add('collapsed');
+        if (!expandedDepartments.has(departmentName)) {
+            teamContainer.classList.add('collapsed');
         }
 
-        node.children.forEach(child => {
-            childrenContainer.appendChild(renderNode(child, level + 1));
+        // Organize by hierarchy within department
+        const heads = deptPeople.filter(p =>
+            p.Title.toLowerCase().includes('head') ||
+            p.Title.toLowerCase().includes('manager') && !p.Manager
+        );
+
+        const others = deptPeople.filter(p => !heads.includes(p));
+
+        heads.forEach(head => {
+            const headContainer = document.createElement('div');
+            headContainer.className = 'node-container';
+            headContainer.appendChild(renderPerson(head, 'department-head'));
+
+            // Find people reporting to this head
+            const reports = others.filter(p => p.Manager === head.Name);
+
+            if (reports.length > 0) {
+                const reportsContainer = document.createElement('div');
+                reportsContainer.className = 'children-container';
+
+                reports.forEach(report => {
+                    reportsContainer.appendChild(renderPerson(report, 'team-member'));
+                });
+
+                headContainer.appendChild(reportsContainer);
+            }
+
+            teamContainer.appendChild(headContainer);
         });
 
-        container.appendChild(childrenContainer);
+        // Add people without a manager in this dept
+        others.filter(p => !p.Manager || !deptPeople.find(h => h.Name === p.Manager))
+            .forEach(person => {
+                teamContainer.appendChild(renderPerson(person, 'team-member'));
+            });
+
+        container.appendChild(teamContainer);
     }
 
     return container;
 }
 
-// Highlight team on hover
-function highlightTeam(nodeId, highlight) {
-    const container = document.querySelector(`[data-node-id="${nodeId}"]`);
-    if (!container) return;
-
-    const childrenContainer = container.querySelector(`#children-${nodeId}`);
-    if (childrenContainer) {
-        const childNodes = childrenContainer.querySelectorAll('.node');
-        childNodes.forEach(node => {
-            if (highlight) {
-                node.style.borderColor = 'var(--moe-cyan)';
-                node.style.boxShadow = '0 0 20px var(--moe-cyan-glow)';
-            } else {
-                node.style.borderColor = '';
-                node.style.boxShadow = '';
-            }
-        });
-    }
-}
-
-// Get node CSS class based on role/title
-function getNodeClass(node) {
-    const title = node.title.toLowerCase();
-    const department = node.department;
-
-    if (title.includes('ceo') || title.includes('chief executive')) {
-        return CONFIG.ROLE_CLASSES['CEO'];
-    }
-    if (title.includes('coo') || title.includes('chief operating')) {
-        return CONFIG.ROLE_CLASSES['COO'];
-    }
-    if (department === 'Admin' || department === 'Ops') {
-        return CONFIG.ROLE_CLASSES['Admin'];
-    }
-    if (department === 'Marketing') {
-        return CONFIG.ROLE_CLASSES['Marketing'];
-    }
-    if (department === 'Production') {
-        return CONFIG.ROLE_CLASSES['Production'];
-    }
-    if (department === 'Warehouse') {
-        return CONFIG.ROLE_CLASSES['Warehouse'];
-    }
-    if (title.includes('manager') || title.includes('head') || title.includes('lead')) {
-        return CONFIG.ROLE_CLASSES['Manager'];
-    }
-
-    return CONFIG.ROLE_CLASSES['Default'];
-}
-
-// Get node icon based on role/title
-function getNodeIcon(node) {
-    const title = node.title.toLowerCase();
-    const department = node.department;
-
-    if (title.includes('ceo') || title.includes('chief executive')) {
-        return CONFIG.ROLE_ICONS['CEO'];
-    }
-    if (title.includes('coo') || title.includes('chief operating')) {
-        return CONFIG.ROLE_ICONS['COO'];
-    }
-    if (department === 'Admin' || department === 'Ops') {
-        return CONFIG.ROLE_ICONS['Admin'];
-    }
-    if (department === 'Marketing') {
-        return CONFIG.ROLE_ICONS['Marketing'];
-    }
-    if (department === 'Production') {
-        return CONFIG.ROLE_ICONS['Production'];
-    }
-    if (department === 'Warehouse') {
-        return CONFIG.ROLE_ICONS['Warehouse'];
-    }
-    if (title.includes('manager') || title.includes('head') || title.includes('lead')) {
-        return CONFIG.ROLE_ICONS['Manager'];
-    }
-
-    return CONFIG.ROLE_ICONS['Default'];
-}
-
-// Toggle node expand/collapse
-function toggleNode(nodeId) {
-    if (expandedNodes.has(nodeId)) {
-        expandedNodes.delete(nodeId);
+// Toggle department expand/collapse
+function toggleDepartment(deptName) {
+    if (expandedDepartments.has(deptName)) {
+        expandedDepartments.delete(deptName);
     } else {
-        expandedNodes.add(nodeId);
+        expandedDepartments.add(deptName);
     }
     buildOrgChart();
 }
 
-// Toggle all nodes
-function toggleAllNodes(expand) {
+// Toggle all departments
+function toggleAllDepartments(expand) {
     if (expand) {
-        // Expand all
-        orgData.forEach(item => {
-            expandedNodes.add(item.Name || item.name);
-        });
+        const departments = [...new Set(orgData
+            .map(p => p.Department)
+            .filter(d => d && d.trim()))];
+        departments.forEach(d => expandedDepartments.add(d));
     } else {
-        // Collapse all
-        expandedNodes.clear();
+        expandedDepartments.clear();
     }
     buildOrgChart();
+}
+
+// Show employee modal with details
+function showEmployeeModal(person) {
+    document.getElementById('modalName').textContent = person.Name;
+    document.getElementById('modalTitle').textContent = person.Title;
+    document.getElementById('modalDepartment').textContent = person.Department || 'Executive';
+
+    // Handle image
+    const modalImage = document.getElementById('modalImage');
+    const imageUrl = person.ImageURL || person.Image || person.Photo;
+
+    if (imageUrl && imageUrl.trim()) {
+        modalImage.src = imageUrl;
+        modalImage.alt = person.Name;
+        modalImage.classList.remove('placeholder');
+    } else {
+        modalImage.src = '';
+        modalImage.alt = '';
+        modalImage.classList.add('placeholder');
+        modalImage.textContent = person.Name.charAt(0);
+    }
+
+    // Handle details/fun facts
+    const details = person.Details || person.FunFacts || person.Bio;
+    const detailsSection = document.getElementById('modalDetailsSection');
+
+    if (details && details.trim()) {
+        document.getElementById('modalDetails').textContent = details;
+        detailsSection.style.display = 'block';
+    } else {
+        detailsSection.style.display = 'none';
+    }
+
+    employeeModal.classList.add('active');
+}
+
+// Close modal
+function closeModal() {
+    employeeModal.classList.remove('active');
 }
 
 // UI Helper Functions
@@ -475,36 +433,36 @@ function hideError() {
     errorScreen.classList.add('hidden');
 }
 
-// Demo data fallback (used when Google Sheets URL is not configured)
+// Demo data fallback
 function loadDemoData() {
     orgData = [
-        { Name: 'Catherine', Title: 'CEO', Department: '', Manager: '' },
-        { Name: 'Pauline', Title: 'COO', Department: '', Manager: 'Catherine' },
+        { Name: 'Catherine', Title: 'CEO', Department: '', Manager: '', Details: 'Founder and visionary leader of Moeflavor. Loves strategy and growth.' },
+        { Name: 'Pauline', Title: 'OBM', Department: '', Manager: 'Catherine', Details: 'Operations mastermind. Keeps everything running smoothly.' },
 
-        { Name: 'Janine', Title: 'Admin Head', Department: 'Admin', Manager: 'Pauline' },
-        { Name: 'Angela', Title: 'Operations Manager', Department: 'Admin', Manager: 'Janine' },
-        { Name: 'Con', Title: 'Office Manager', Department: 'Admin', Manager: 'Janine' },
+        { Name: 'Janine', Title: 'Admin Head', Department: 'Admin', Manager: 'Pauline', Details: '' },
+        { Name: 'Angela', Title: 'Operations Manager', Department: 'Admin', Manager: 'Janine', Details: '' },
+        { Name: 'Con', Title: 'Office Manager', Department: 'Admin', Manager: 'Janine', Details: '' },
 
-        { Name: 'Jeanne', Title: 'Marketing Head', Department: 'Marketing', Manager: 'Pauline' },
-        { Name: 'Kriselle', Title: 'Marketing Manager', Department: 'Marketing', Manager: 'Jeanne' },
-        { Name: 'Kez', Title: 'Social Media Lead', Department: 'Marketing', Manager: 'Kriselle' },
-        { Name: 'Edgar', Title: 'Content Creator', Department: 'Marketing', Manager: 'Kriselle' },
-        { Name: 'Franz', Title: 'Designer', Department: 'Marketing', Manager: 'Kriselle' },
-        { Name: 'Kei', Title: 'Ads Specialist', Department: 'Marketing', Manager: 'Kriselle' },
+        { Name: 'Jeanne', Title: 'Marketing Head', Department: 'Marketing', Manager: 'Pauline', Details: '' },
+        { Name: 'Kriselle', Title: 'Marketing Manager', Department: 'Marketing', Manager: 'Jeanne', Details: '' },
+        { Name: 'Kez', Title: 'Social Media Lead', Department: 'Marketing', Manager: 'Kriselle', Details: '' },
+        { Name: 'Edgar', Title: 'Content Creator', Department: 'Marketing', Manager: 'Kriselle', Details: '' },
+        { Name: 'Franz', Title: 'Designer', Department: 'Marketing', Manager: 'Kriselle', Details: '' },
+        { Name: 'Kei', Title: 'Ads Specialist', Department: 'Marketing', Manager: 'Kriselle', Details: '' },
 
-        { Name: 'Gjay', Title: 'Ads Team Lead', Department: 'Marketing', Manager: 'Pauline' },
-        { Name: 'Olivet', Title: 'Ads Manager', Department: 'Marketing', Manager: 'Gjay' },
+        { Name: 'Gjay', Title: 'Ads Team Lead', Department: 'Marketing', Manager: 'Pauline', Details: '' },
+        { Name: 'Olivet', Title: 'Ads Manager', Department: 'Marketing', Manager: 'Gjay', Details: '' },
 
-        { Name: 'Sharry', Title: 'Production Head', Department: 'Production', Manager: 'Pauline' },
-        { Name: 'Micah', Title: 'Production Manager', Department: 'Production', Manager: 'Sharry' },
+        { Name: 'Sharry', Title: 'Production Head', Department: 'Production', Manager: 'Pauline', Details: '' },
+        { Name: 'Micah', Title: 'Production Manager', Department: 'Production', Manager: 'Sharry', Details: '' },
 
-        { Name: 'Ryan', Title: 'US Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline' },
-        { Name: 'Michael', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan' },
-        { Name: 'Dean', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan' },
-        { Name: 'Claude', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan' },
+        { Name: 'Ryan', Title: 'US Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline', Details: '' },
+        { Name: 'Michael', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '' },
+        { Name: 'Dean', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '' },
+        { Name: 'Claude', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '' },
 
-        { Name: 'Robert', Title: 'China Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline' },
-        { Name: 'Mary', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Robert' }
+        { Name: 'Robert', Title: 'China Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline', Details: '' },
+        { Name: 'Mary', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Robert', Details: '' }
     ];
 
     buildOrgChart();
@@ -514,5 +472,5 @@ function loadDemoData() {
 // Use demo data if Google Sheets URL is not configured
 if (!CONFIG.SHEET_URL || CONFIG.SHEET_URL === 'YOUR_GOOGLE_SHEET_CSV_URL') {
     console.log('Using demo data. Configure Google Sheets URL to use real data.');
-    setTimeout(loadDemoData, 1500); // Show loading animation briefly
+    setTimeout(loadDemoData, 1500);
 }

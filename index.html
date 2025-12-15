@@ -3,42 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moeflavor | Organization Chart</title>
+    <title>Moeflavor | Organization</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💖</text></svg>">
 </head>
 <body>
     <div class="container">
         <header class="pixel-header">
-            <h1 class="pixel-title">🎮 Moeflavor Kingdom 💖</h1>
+            <h1 class="pixel-title">Moeflavor Organization</h1>
             <div class="title-decoration"></div>
         </header>
 
         <div class="controls-panel">
-            <button id="refreshBtn" class="pixel-btn">
-                <span class="btn-icon">🔄</span> Refresh Data
-            </button>
-            <button id="expandAllBtn" class="pixel-btn">
-                <span class="btn-icon">📖</span> Expand All
-            </button>
-            <button id="collapseAllBtn" class="pixel-btn">
-                <span class="btn-icon">📕</span> Collapse All
-            </button>
-            <button id="zoomInBtn" class="pixel-btn">
-                <span class="btn-icon">🔍</span> Zoom In
-            </button>
-            <button id="zoomOutBtn" class="pixel-btn">
-                <span class="btn-icon">🔎</span> Zoom Out
-            </button>
-            <button id="resetZoomBtn" class="pixel-btn">
-                <span class="btn-icon">🎯</span> Reset View
-            </button>
+            <button id="refreshBtn" class="pixel-btn">Refresh Data</button>
+            <button id="expandAllBtn" class="pixel-btn">Expand All</button>
+            <button id="collapseAllBtn" class="pixel-btn">Collapse All</button>
+            <button id="zoomInBtn" class="pixel-btn">Zoom In</button>
+            <button id="zoomOutBtn" class="pixel-btn">Zoom Out</button>
+            <button id="resetZoomBtn" class="pixel-btn">Reset View</button>
         </div>
 
         <div id="loadingScreen" class="loading-screen">
             <div class="pixel-loader">
-                <div class="loader-castle">💖</div>
-                <div class="loader-text">Loading Kingdom...</div>
+                <div class="loader-castle">◆</div>
+                <div class="loader-text">Loading...</div>
                 <div class="loader-bar">
                     <div class="loader-progress"></div>
                 </div>
@@ -47,8 +35,8 @@
 
         <div id="errorScreen" class="error-screen hidden">
             <div class="error-content">
-                <div class="error-icon">⚠️</div>
-                <h2>Quest Failed!</h2>
+                <div class="error-icon">!</div>
+                <h2>Error</h2>
                 <p id="errorMessage"></p>
                 <button id="retryBtn" class="pixel-btn">Try Again</button>
             </div>
@@ -59,8 +47,27 @@
         </div>
     </div>
 
+    <!-- Employee Details Modal -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">×</button>
+            <div class="modal-header">
+                <img id="modalImage" class="modal-image" src="" alt="">
+                <div class="modal-info">
+                    <h2 class="modal-name" id="modalName"></h2>
+                    <div class="modal-title" id="modalTitle"></div>
+                    <div class="modal-department" id="modalDepartment"></div>
+                </div>
+            </div>
+            <div class="modal-details" id="modalDetailsSection">
+                <h3>Fun Facts</h3>
+                <p id="modalDetails"></p>
+            </div>
+        </div>
+    </div>
+
     <footer class="pixel-footer">
-        <p>💖 Moeflavor Organization Chart v2.0 - Cyber Kawaii Edition 💖</p>
+        <p>Moeflavor Organization Chart 2025</p>
     </footer>
 
     <script src="script.js"></script>
