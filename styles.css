@@ -497,6 +497,62 @@ body {
     white-space: pre-line;
 }
 
+/* Department Team Grid in Modal */
+.department-team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.team-member-card {
+    background: var(--moe-black);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.team-member-card:hover {
+    border-color: var(--moe-pink);
+    box-shadow: 0 0 20px var(--moe-pink-glow);
+    transform: translateY(-2px);
+}
+
+.team-member-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.team-member-title {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.team-member-reports {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+
+/* Department Section Styling */
+.department-section {
+    margin-bottom: 30px;
+}
+
+.department-section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--moe-pink);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* Footer */
 .pixel-footer {
     text-align: center;
