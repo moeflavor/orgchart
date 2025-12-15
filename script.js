@@ -4,17 +4,17 @@ const CONFIG = {
     // Format: https://docs.google.com/spreadsheets/d/SHEET_ID/export?format=csv&gid=SHEET_GID
     SHEET_URL: 'https://docs.google.com/spreadsheets/d/18kYODhewBvEQWVHSASmt7x9rQJ7lRzO_l_Ce0TBG10k/export?format=csv&gid=0',
 
-    // Role icons mapping
+    // Role icons mapping - Modern themed
     ROLE_ICONS: {
         'CEO': '👑',
         'COO': '💎',
-        'Admin': '📋',
-        'Marketing': '📢',
-        'Production': '🏭',
+        'Admin': '⚡',
+        'Marketing': '🚀',
+        'Production': '⚙️',
         'Warehouse': '📦',
         'Manager': '⭐',
         'Team Lead': '🎯',
-        'Team Member': '👤',
+        'Team Member': '💫',
         'Default': '🎮'
     },
 
@@ -35,6 +35,12 @@ const CONFIG = {
 // Global state
 let orgData = [];
 let expandedNodes = new Set();
+let zoomLevel = 1;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let startX = 0;
+let startY = 0;
 
 // DOM Elements
 const loadingScreen = document.getElementById('loadingScreen');
@@ -44,20 +50,92 @@ const orgChart = document.getElementById('orgChart');
 const refreshBtn = document.getElementById('refreshBtn');
 const expandAllBtn = document.getElementById('expandAllBtn');
 const collapseAllBtn = document.getElementById('collapseAllBtn');
+const zoomInBtn = document.getElementById('zoomInBtn');
+const zoomOutBtn = document.getElementById('zoomOutBtn');
+const resetZoomBtn = document.getElementById('resetZoomBtn');
 const retryBtn = document.getElementById('retryBtn');
 
 // Event Listeners
 refreshBtn.addEventListener('click', () => loadData());
 expandAllBtn.addEventListener('click', () => toggleAllNodes(true));
 collapseAllBtn.addEventListener('click', () => toggleAllNodes(false));
+zoomInBtn.addEventListener('click', () => zoom(0.1));
+zoomOutBtn.addEventListener('click', () => zoom(-0.1));
+resetZoomBtn.addEventListener('click', () => resetView());
 retryBtn.addEventListener('click', () => {
     hideError();
     loadData();
 });
 
+// Zoom and Pan functionality
+function zoom(delta) {
+    zoomLevel = Math.max(0.5, Math.min(2, zoomLevel + delta));
+    applyTransform();
+}
+
+function resetView() {
+    zoomLevel = 1;
+    panX = 0;
+    panY = 0;
+    applyTransform();
+}
+
+function applyTransform() {
+    orgChart.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+}
+
+// Mouse wheel zoom
+orgChart.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.05 : 0.05;
+    zoom(delta);
+});
+
+// Pan functionality
+orgChart.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.node') || e.target.closest('.expand-btn')) return;
+    isPanning = true;
+    startX = e.clientX - panX;
+    startY = e.clientY - panY;
+    orgChart.style.cursor = 'grabbing';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    panX = e.clientX - startX;
+    panY = e.clientY - startY;
+    applyTransform();
+});
+
+document.addEventListener('mouseup', () => {
+    isPanning = false;
+    orgChart.style.cursor = 'grab';
+});
+
+// Touch support for mobile
+let touchStartX = 0;
+let touchStartY = 0;
+
+orgChart.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX - panX;
+        touchStartY = e.touches[0].clientY - panY;
+    }
+});
+
+orgChart.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1) {
+        e.preventDefault();
+        panX = e.touches[0].clientX - touchStartX;
+        panY = e.touches[0].clientY - touchStartY;
+        applyTransform();
+    }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
+    orgChart.style.cursor = 'grab';
 });
 
 // Load data from Google Sheets
@@ -155,7 +233,7 @@ function buildOrgChart() {
 
         orgChart.appendChild(chartContainer);
     } else {
-        orgChart.innerHTML = '<p style="text-align: center; padding: 40px; font-size: 12px;">No organizational data to display</p>';
+        orgChart.innerHTML = '<p style="text-align: center; padding: 40px; font-size: 14px; color: var(--text-secondary);">No organizational data to display</p>';
     }
 }
 
@@ -199,6 +277,10 @@ function renderNode(node, level = 0) {
     const nodeElement = document.createElement('div');
     nodeElement.className = 'node ' + getNodeClass(node);
 
+    // Add hover effect for team highlighting
+    nodeElement.addEventListener('mouseenter', () => highlightTeam(node.id, true));
+    nodeElement.addEventListener('mouseleave', () => highlightTeam(node.id, false));
+
     // Add icon
     const icon = document.createElement('span');
     icon.className = 'node-icon';
@@ -223,7 +305,7 @@ function renderNode(node, level = 0) {
     if (node.department) {
         const deptElement = document.createElement('div');
         deptElement.className = 'node-title';
-        deptElement.textContent = node.department;
+        deptElement.textContent = `📍 ${node.department}`;
         nodeElement.appendChild(deptElement);
     }
 
@@ -246,7 +328,7 @@ function renderNode(node, level = 0) {
         // Connection line
         const connectionLine = document.createElement('div');
         connectionLine.className = 'connection-line';
-        connectionLine.style.height = '30px';
+        connectionLine.style.height = '40px';
         container.appendChild(connectionLine);
 
         // Children container
@@ -266,6 +348,26 @@ function renderNode(node, level = 0) {
     }
 
     return container;
+}
+
+// Highlight team on hover
+function highlightTeam(nodeId, highlight) {
+    const container = document.querySelector(`[data-node-id="${nodeId}"]`);
+    if (!container) return;
+
+    const childrenContainer = container.querySelector(`#children-${nodeId}`);
+    if (childrenContainer) {
+        const childNodes = childrenContainer.querySelectorAll('.node');
+        childNodes.forEach(node => {
+            if (highlight) {
+                node.style.borderColor = 'var(--moe-cyan)';
+                node.style.boxShadow = '0 0 20px var(--moe-cyan-glow)';
+            } else {
+                node.style.borderColor = '';
+                node.style.boxShadow = '';
+            }
+        });
+    }
 }
 
 // Get node CSS class based on role/title

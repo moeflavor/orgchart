@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kingdom Org Chart</title>
+    <title>Moeflavor | Organization Chart</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💖</text></svg>">
 </head>
 <body>
-    <div class="kingdom-background">
-        <div class="clouds"></div>
-        <div class="mountains"></div>
-    </div>
-
     <div class="container">
         <header class="pixel-header">
-            <h1 class="pixel-title">🏰 Kingdom Organization 🏰</h1>
+            <h1 class="pixel-title">🎮 Moeflavor Kingdom 💖</h1>
             <div class="title-decoration"></div>
         </header>
 
@@ -28,11 +24,20 @@
             <button id="collapseAllBtn" class="pixel-btn">
                 <span class="btn-icon">📕</span> Collapse All
             </button>
+            <button id="zoomInBtn" class="pixel-btn">
+                <span class="btn-icon">🔍</span> Zoom In
+            </button>
+            <button id="zoomOutBtn" class="pixel-btn">
+                <span class="btn-icon">🔎</span> Zoom Out
+            </button>
+            <button id="resetZoomBtn" class="pixel-btn">
+                <span class="btn-icon">🎯</span> Reset View
+            </button>
         </div>
 
         <div id="loadingScreen" class="loading-screen">
             <div class="pixel-loader">
-                <div class="loader-castle">🏰</div>
+                <div class="loader-castle">💖</div>
                 <div class="loader-text">Loading Kingdom...</div>
                 <div class="loader-bar">
                     <div class="loader-progress"></div>
@@ -49,11 +54,13 @@
             </div>
         </div>
 
-        <div id="orgChart" class="org-chart"></div>
+        <div class="org-chart-wrapper">
+            <div id="orgChart" class="org-chart"></div>
+        </div>
     </div>
 
     <footer class="pixel-footer">
-        <p>🎮 Pixel Kingdom Org Chart v1.0 🎮</p>
+        <p>💖 Moeflavor Organization Chart v2.0 - Cyber Kawaii Edition 💖</p>
     </footer>
 
     <script src="script.js"></script>
