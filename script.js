@@ -5,12 +5,6 @@ const CONFIG = {
 
 // Global state
 let orgData = [];
-let zoomLevel = 1;
-let panX = 0;
-let panY = 0;
-let isPanning = false;
-let startX = 0;
-let startY = 0;
 
 // DOM Elements
 const loadingScreen = document.getElementById('loadingScreen');
@@ -18,102 +12,25 @@ const errorScreen = document.getElementById('errorScreen');
 const errorMessage = document.getElementById('errorMessage');
 const orgChart = document.getElementById('orgChart');
 const refreshBtn = document.getElementById('refreshBtn');
-const expandAllBtn = document.getElementById('expandAllBtn');
-const collapseAllBtn = document.getElementById('collapseAllBtn');
-const zoomInBtn = document.getElementById('zoomInBtn');
-const zoomOutBtn = document.getElementById('zoomOutBtn');
-const resetZoomBtn = document.getElementById('resetZoomBtn');
 const retryBtn = document.getElementById('retryBtn');
 const employeeModal = document.getElementById('employeeModal');
 const modalClose = document.getElementById('modalClose');
 
 // Event Listeners
 refreshBtn.addEventListener('click', () => loadData());
-expandAllBtn.addEventListener('click', () => showAllDepartmentsModal());
-collapseAllBtn.addEventListener('click', () => closeModal());
-zoomInBtn.addEventListener('click', () => zoom(0.1));
-zoomOutBtn.addEventListener('click', () => zoom(-0.1));
-resetZoomBtn.addEventListener('click', () => resetView());
 retryBtn.addEventListener('click', () => {
     hideError();
     loadData();
 });
 
-// Modal controls
 modalClose.addEventListener('click', () => closeModal());
 employeeModal.addEventListener('click', (e) => {
     if (e.target === employeeModal) closeModal();
 });
 
-// Zoom and Pan functionality
-function zoom(delta) {
-    zoomLevel = Math.max(0.5, Math.min(2, zoomLevel + delta));
-    applyTransform();
-}
-
-function resetView() {
-    zoomLevel = 1;
-    panX = 0;
-    panY = 0;
-    applyTransform();
-}
-
-function applyTransform() {
-    orgChart.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
-}
-
-// Mouse wheel zoom
-orgChart.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.05 : 0.05;
-    zoom(delta);
-});
-
-// Pan functionality
-orgChart.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.node') || e.target.closest('.expand-btn')) return;
-    isPanning = true;
-    startX = e.clientX - panX;
-    startY = e.clientY - panY;
-    orgChart.style.cursor = 'grabbing';
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (!isPanning) return;
-    panX = e.clientX - startX;
-    panY = e.clientY - startY;
-    applyTransform();
-});
-
-document.addEventListener('mouseup', () => {
-    isPanning = false;
-    orgChart.style.cursor = 'grab';
-});
-
-// Touch support for mobile
-let touchStartX = 0;
-let touchStartY = 0;
-
-orgChart.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX - panX;
-        touchStartY = e.touches[0].clientY - panY;
-    }
-});
-
-orgChart.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1) {
-        e.preventDefault();
-        panX = e.touches[0].clientX - touchStartX;
-        panY = e.touches[0].clientY - touchStartY;
-        applyTransform();
-    }
-});
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
-    orgChart.style.cursor = 'grab';
 });
 
 // Load data from Google Sheets
@@ -192,20 +109,15 @@ function parseCSVLine(line) {
     return values;
 }
 
-// Fix Imgur URLs - convert album links to direct image links
+// Fix Imgur URLs
 function fixImgurUrl(url) {
     if (!url || !url.includes('imgur.com')) return url;
 
-    // If it's an album link like https://imgur.com/a/yAU0LAM
     if (url.includes('/a/')) {
-        const albumId = url.split('/a/')[1].split(/[/?#]/)[0];
-        // We can't get the direct image from album without API
-        // User needs to open the album and get the direct image link
         console.warn('Album link detected. Please use direct image link instead:', url);
         return url;
     }
 
-    // If it's like https://imgur.com/abc123, convert to https://i.imgur.com/abc123.png
     if (url.includes('imgur.com/') && !url.includes('i.imgur.com')) {
         const imageId = url.split('imgur.com/')[1].split(/[/?#]/)[0];
         return `https://i.imgur.com/${imageId}.png`;
@@ -214,63 +126,31 @@ function fixImgurUrl(url) {
     return url;
 }
 
-// Build organizational chart with new hierarchy: CEO → OBM → Departments
+// Build organizational chart as a tree
 function buildOrgChart() {
     orgChart.innerHTML = '';
 
-    const chartContainer = document.createElement('div');
-    chartContainer.className = 'chart-container';
+    const tree = document.createElement('div');
+    tree.className = 'tree';
 
-    // Find CEO (Catherine)
+    // Find CEO
     const ceo = orgData.find(p => p.Name === 'Catherine' || p.Title.toLowerCase().includes('ceo'));
 
-    // Find OBM (Pauline)
-    const obm = orgData.find(p => p.Name === 'Pauline' || p.Title.toLowerCase().includes('obm') || p.Title.toLowerCase().includes('coo'));
-
-    // Get all departments
-    const departments = [...new Set(orgData
-        .map(p => p.Department)
-        .filter(d => d && d.trim()))];
-
-    // Render CEO
     if (ceo) {
-        chartContainer.appendChild(renderPerson(ceo, 'ceo'));
+        tree.appendChild(buildTreeNode(ceo));
     }
 
-    // Connection line
-    const ceoLine = document.createElement('div');
-    ceoLine.className = 'connection-line';
-    ceoLine.style.height = '40px';
-    chartContainer.appendChild(ceoLine);
-
-    // Render OBM
-    if (obm) {
-        chartContainer.appendChild(renderPerson(obm, 'obm'));
-    }
-
-    // Connection line
-    const obmLine = document.createElement('div');
-    obmLine.className = 'connection-line';
-    obmLine.style.height = '40px';
-    chartContainer.appendChild(obmLine);
-
-    // Render Departments Grid
-    const deptGrid = document.createElement('div');
-    deptGrid.className = 'departments-grid';
-
-    departments.forEach(dept => {
-        const deptNode = renderDepartmentCard(dept);
-        deptGrid.appendChild(deptNode);
-    });
-
-    chartContainer.appendChild(deptGrid);
-    orgChart.appendChild(chartContainer);
+    orgChart.appendChild(tree);
 }
 
-// Render a person card
-function renderPerson(person, roleClass = 'team-member') {
+// Build a tree node recursively
+function buildTreeNode(person) {
+    const nodeContainer = document.createElement('div');
+    nodeContainer.className = 'tree-node';
+
+    // Create the person's card
     const node = document.createElement('div');
-    node.className = `node ${roleClass}`;
+    node.className = `node ${getNodeClass(person)}`;
     node.onclick = () => showEmployeeModal(person);
 
     const nameEl = document.createElement('div');
@@ -285,117 +165,112 @@ function renderPerson(person, roleClass = 'team-member') {
         node.appendChild(titleEl);
     }
 
-    return node;
-}
-
-// Render a department card (just the card, click opens modal)
-function renderDepartmentCard(departmentName) {
-    const deptNode = document.createElement('div');
-    deptNode.className = 'node department';
-    deptNode.onclick = () => showDepartmentModal(departmentName);
-
-    const deptNameEl = document.createElement('div');
-    deptNameEl.className = 'node-name';
-    deptNameEl.textContent = departmentName;
-    deptNode.appendChild(deptNameEl);
-
-    // Count team members
-    const deptPeople = orgData.filter(p => p.Department === departmentName);
-
-    if (deptPeople.length > 0) {
-        const countEl = document.createElement('div');
-        countEl.className = 'node-title';
-        countEl.textContent = `${deptPeople.length} ${deptPeople.length === 1 ? 'Person' : 'People'}`;
-        deptNode.appendChild(countEl);
+    if (person.Location) {
+        const locationEl = document.createElement('div');
+        locationEl.className = 'node-location';
+        locationEl.textContent = person.Location;
+        node.appendChild(locationEl);
     }
 
-    return deptNode;
-}
+    nodeContainer.appendChild(node);
 
-// Show department modal with all team members
-function showDepartmentModal(departmentName) {
-    const deptPeople = orgData.filter(p => p.Department === departmentName);
+    // Find direct reports
+    const directReports = orgData.filter(p => p.Manager === person.Name);
 
-    if (deptPeople.length === 0) {
-        return;
+    // Special handling for Marketing - split into sub-departments
+    if (person.Department === 'Marketing' && !person.SubDepartment && directReports.length > 0) {
+        // Group by SubDepartment
+        const organicTeam = directReports.filter(p => p.SubDepartment === 'Organic Team');
+        const adsTeam = directReports.filter(p => p.SubDepartment === 'Ads Team');
+        const noSubDept = directReports.filter(p => !p.SubDepartment);
+
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'tree-children';
+
+        // Render Organic Team
+        if (organicTeam.length > 0) {
+            const organicNode = createSubDepartmentNode('Organic Team', organicTeam);
+            childrenContainer.appendChild(organicNode);
+        }
+
+        // Render Ads Team
+        if (adsTeam.length > 0) {
+            const adsNode = createSubDepartmentNode('Ads Team', adsTeam);
+            childrenContainer.appendChild(adsNode);
+        }
+
+        // Render people without sub-department
+        noSubDept.forEach(report => {
+            childrenContainer.appendChild(buildTreeNode(report));
+        });
+
+        if (childrenContainer.children.length > 0) {
+            nodeContainer.appendChild(childrenContainer);
+        }
+    } else if (directReports.length > 0) {
+        // Normal rendering for other departments
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'tree-children';
+
+        directReports.forEach(report => {
+            childrenContainer.appendChild(buildTreeNode(report));
+        });
+
+        nodeContainer.appendChild(childrenContainer);
     }
 
-    // Build modal content for department
-    const modalContent = `
-        <button class="modal-close" onclick="closeModal()">×</button>
-        <div class="modal-header">
-            <div class="modal-info" style="width: 100%;">
-                <h2 class="modal-name">${departmentName} Department</h2>
-                <div class="modal-title">${deptPeople.length} Team ${deptPeople.length === 1 ? 'Member' : 'Members'}</div>
-            </div>
-        </div>
-        <div class="modal-details">
-            <div class="department-team-grid">
-                ${deptPeople.map(person => `
-                    <div class="team-member-card" onclick="event.stopPropagation(); showEmployeeModal(${JSON.stringify(person).replace(/"/g, '&quot;')})">
-                        <div class="team-member-name">${person.Name}</div>
-                        <div class="team-member-title">${person.Title || ''}</div>
-                        ${person.Manager ? `<div class="team-member-reports">Reports to: ${person.Manager}</div>` : ''}
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-
-    const modalElement = document.querySelector('.modal-content');
-    modalElement.innerHTML = modalContent;
-    employeeModal.classList.add('active');
+    return nodeContainer;
 }
 
-// Show all departments in one modal
-function showAllDepartmentsModal() {
-    const departments = [...new Set(orgData
-        .map(p => p.Department)
-        .filter(d => d && d.trim()))];
+// Create a sub-department node
+function createSubDepartmentNode(subDeptName, team) {
+    const subDeptContainer = document.createElement('div');
+    subDeptContainer.className = 'tree-node';
 
-    let departmentsHtml = '';
-    departments.forEach(dept => {
-        const deptPeople = orgData.filter(p => p.Department === dept);
-        departmentsHtml += `
-            <div class="department-section">
-                <h3 class="department-section-title">${dept} (${deptPeople.length})</h3>
-                <div class="department-team-grid">
-                    ${deptPeople.map(person => `
-                        <div class="team-member-card" onclick="event.stopPropagation(); closeModal(); setTimeout(() => showEmployeeModal(${JSON.stringify(person).replace(/"/g, '&quot;')}), 100)">
-                            <div class="team-member-name">${person.Name}</div>
-                            <div class="team-member-title">${person.Title || ''}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    });
+    // Sub-department header
+    const subDeptNode = document.createElement('div');
+    subDeptNode.className = 'node department';
 
-    const modalContent = `
-        <button class="modal-close" onclick="closeModal()">×</button>
-        <div class="modal-header">
-            <div class="modal-info" style="width: 100%;">
-                <h2 class="modal-name">All Departments</h2>
-            </div>
-        </div>
-        <div class="modal-details" style="max-height: 70vh; overflow-y: auto;">
-            ${departmentsHtml}
-        </div>
-    `;
+    const nameEl = document.createElement('div');
+    nameEl.className = 'node-name';
+    nameEl.textContent = subDeptName;
+    subDeptNode.appendChild(nameEl);
 
-    const modalElement = document.querySelector('.modal-content');
-    modalElement.innerHTML = modalContent;
-    employeeModal.classList.add('active');
+    subDeptContainer.appendChild(subDeptNode);
+
+    // Team members under this sub-department
+    if (team.length > 0) {
+        const teamContainer = document.createElement('div');
+        teamContainer.className = 'tree-children';
+
+        team.forEach(member => {
+            teamContainer.appendChild(buildTreeNode(member));
+        });
+
+        subDeptContainer.appendChild(teamContainer);
+    }
+
+    return subDeptContainer;
 }
 
-// Show employee modal with details
+// Get node class based on role
+function getNodeClass(person) {
+    const title = person.Title.toLowerCase();
+
+    if (title.includes('ceo')) return 'ceo';
+    if (title.includes('obm') || title.includes('coo')) return 'obm';
+    if (title.includes('head') || title.includes('director')) return 'department-head';
+    if (title.includes('manager') || title.includes('lead')) return 'department-head';
+
+    return 'team-member';
+}
+
+// Show employee modal
 function showEmployeeModal(person) {
-    // If person is a string, parse it (from onclick JSON)
     if (typeof person === 'string') {
         person = JSON.parse(person);
     }
 
-    // Handle image - fix Imgur URLs
     let imageUrl = person.ImageURL || person.Image || person.Photo || '';
     imageUrl = fixImgurUrl(imageUrl);
 
@@ -404,7 +279,6 @@ function showEmployeeModal(person) {
          <div class="modal-image placeholder" style="display: none;">${person.Name.charAt(0)}</div>` :
         `<div class="modal-image placeholder">${person.Name.charAt(0)}</div>`;
 
-    // Handle details/fun facts
     const details = person.Details || person.FunFacts || person.Bio || '';
     const detailsHtml = details && details.trim() ?
         `<div class="modal-details">
@@ -419,8 +293,10 @@ function showEmployeeModal(person) {
             <div class="modal-info">
                 <h2 class="modal-name">${person.Name}</h2>
                 <div class="modal-title">${person.Title}</div>
-                <div class="modal-department">${person.Department || 'Executive'}</div>
+                ${person.Department ? `<div class="modal-department">${person.Department}</div>` : ''}
+                ${person.SubDepartment ? `<div class="modal-department">${person.SubDepartment}</div>` : ''}
                 ${person.Manager ? `<div class="modal-department" style="margin-top: 8px;">Reports to: ${person.Manager}</div>` : ''}
+                ${person.Location ? `<div class="modal-department" style="margin-top: 4px;">📍 ${person.Location}</div>` : ''}
             </div>
         </div>
         ${detailsHtml}
@@ -436,11 +312,10 @@ function closeModal() {
     employeeModal.classList.remove('active');
 }
 
-// Make closeModal global for onclick handlers
 window.closeModal = closeModal;
 window.showEmployeeModal = showEmployeeModal;
 
-// UI Helper Functions
+// UI Helpers
 function showLoading() {
     loadingScreen.classList.remove('hidden');
     errorScreen.classList.add('hidden');
@@ -459,46 +334,4 @@ function showError(message) {
 
 function hideError() {
     errorScreen.classList.add('hidden');
-}
-
-// Demo data fallback
-function loadDemoData() {
-    orgData = [
-        { Name: 'Catherine', Title: 'CEO', Department: '', Manager: '', Details: 'Founder and visionary leader of Moeflavor. Loves strategy and growth.', ImageURL: '' },
-        { Name: 'Pauline', Title: 'OBM', Department: '', Manager: 'Catherine', Details: 'Operations mastermind. Keeps everything running smoothly.', ImageURL: '' },
-
-        { Name: 'Janine', Title: 'Admin Head', Department: 'Admin', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Angela', Title: 'Operations Manager', Department: 'Admin', Manager: 'Janine', Details: '', ImageURL: '' },
-        { Name: 'Con', Title: 'Office Manager', Department: 'Admin', Manager: 'Janine', Details: '', ImageURL: '' },
-
-        { Name: 'Jeanne', Title: 'Marketing Head', Department: 'Marketing', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Marielet', Title: 'Marketing Manager', Department: 'Marketing', Manager: 'Jeanne', Details: '', ImageURL: '' },
-        { Name: 'Kez', Title: 'Social Media Lead', Department: 'Marketing', Manager: 'Marielet', Details: '', ImageURL: '' },
-        { Name: 'Edgar', Title: 'Content Creator', Department: 'Marketing', Manager: 'Marielet', Details: '', ImageURL: '' },
-        { Name: 'Franz', Title: 'Designer', Department: 'Marketing', Manager: 'Marielet', Details: '', ImageURL: '' },
-        { Name: 'Kei', Title: 'Ads Specialist', Department: 'Marketing', Manager: 'Marielet', Details: '', ImageURL: '' },
-
-        { Name: 'Gjay', Title: 'Ads Team Lead', Department: 'Marketing', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Olivet', Title: 'Ads Manager', Department: 'Marketing', Manager: 'Gjay', Details: '', ImageURL: '' },
-
-        { Name: 'Sharry', Title: 'Production Head', Department: 'Production', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Micah', Title: 'Production Manager', Department: 'Production', Manager: 'Sharry', Details: '', ImageURL: '' },
-
-        { Name: 'Ryan', Title: 'US Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Michael', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '', ImageURL: '' },
-        { Name: 'Dean', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '', ImageURL: '' },
-        { Name: 'Claude', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Ryan', Details: '', ImageURL: '' },
-
-        { Name: 'Robert', Title: 'China Warehouse Manager', Department: 'Warehouse', Manager: 'Pauline', Details: '', ImageURL: '' },
-        { Name: 'Mary', Title: 'Warehouse Staff', Department: 'Warehouse', Manager: 'Robert', Details: '', ImageURL: '' }
-    ];
-
-    buildOrgChart();
-    hideLoading();
-}
-
-// Use demo data if Google Sheets URL is not configured
-if (!CONFIG.SHEET_URL || CONFIG.SHEET_URL === 'YOUR_GOOGLE_SHEET_CSV_URL') {
-    console.log('Using demo data. Configure Google Sheets URL to use real data.');
-    setTimeout(loadDemoData, 1500);
 }
